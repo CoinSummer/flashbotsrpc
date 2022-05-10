@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"github.com/metachris/flashbotsrpc/examples/signature"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/metachris/flashbotsrpc"
@@ -20,7 +21,12 @@ func main() {
 		BlockNumber: fmt.Sprintf("0x%x", 13281018),
 	}
 
-	result, err := rpc.FlashbotsSendBundle(privateKey, sendBundleArgs)
+	s, body, err := signature.Signature(rpc, privateKey, flashbotsrpc.EthSendbundle, sendBundleArgs)
+	if err != nil {
+		_ = fmt.Errorf("call signature error: %s", err)
+		return
+	}
+	result, err := rpc.FlashbotsSendBundle(crypto.PubkeyToAddress(privateKey.PublicKey), s, body)
 	if err != nil {
 		if errors.Is(err, flashbotsrpc.ErrRelayErrorResponse) {
 			// ErrRelayErrorResponse means it's a standard Flashbots relay error response, so probably a user error, rather than JSON or network error
@@ -35,7 +41,13 @@ func main() {
 		BlockNumber: fmt.Sprintf("0x%x", 13281018),
 		BundleHash:  result.BundleHash,
 	}
-	bundleStats, err := rpc.FlashbotsGetBundleStats(privateKey, getBundleStatsArgs)
+
+	s, body, err = signature.Signature(rpc, privateKey, flashbotsrpc.FbGetbundlestats, getBundleStatsArgs)
+	if err != nil {
+		_ = fmt.Errorf("call signature error: %s", err)
+		return
+	}
+	bundleStats, err := rpc.FlashbotsGetBundleStats(crypto.PubkeyToAddress(privateKey.PublicKey), s, body)
 	if err != nil {
 		if errors.Is(err, flashbotsrpc.ErrRelayErrorResponse) {
 			// ErrRelayErrorResponse means it's a standard Flashbots relay error response, so probably a user error, rather than JSON or network error

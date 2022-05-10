@@ -13,6 +13,17 @@ import (
 // ErrRelayErrorResponse means it's a standard Flashbots relay error response - probably a user error rather than JSON or network error
 var ErrRelayErrorResponse = errors.New("relay error response")
 
+type FlashBotMethod string
+
+const (
+	FbGetuserstats              FlashBotMethod = "flashbots_getUserStats"
+	EthCallbundle               FlashBotMethod = "eth_callBundle"
+	EthSendbundle               FlashBotMethod = "eth_sendBundle"
+	FbGetbundlestats            FlashBotMethod = "flashbots_getBundleStats"
+	EthSendprivatetransaction   FlashBotMethod = "eth_sendPrivateTransaction"
+	EthCancelprivatetransaction FlashBotMethod = "eth_cancelPrivateTransaction"
+)
+
 // Syncing - object with syncing data info
 type Syncing struct {
 	IsSyncing     bool

@@ -2,9 +2,9 @@ package flashbotsrpc
 
 import (
 	"bytes"
-	"crypto/ecdsa"
 	"encoding/json"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common"
 	"io/ioutil"
 	"log"
 	"math/big"
@@ -12,10 +12,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 )
 
 // RpcError - ethereum error
@@ -148,27 +145,19 @@ func (rpc *FlashbotsRPC) Call(method string, params ...interface{}) (json.RawMes
 	return resp.Result, nil
 }
 
-// CallWithFlashbotsSignature is like Call but also signs the request
-func (rpc *FlashbotsRPC) CallWithFlashbotsSignature(method string, privKey *ecdsa.PrivateKey, params ...interface{}) (json.RawMessage, error) {
+func (rpc *FlashbotsRPC) FlashbotsMessage(method FlashBotMethod, params ...interface{}) ([]byte, error) {
 	request := rpcRequest{
 		ID:      1,
 		JSONRPC: "2.0",
-		Method:  method,
+		Method:  string(method),
 		Params:  params,
 	}
+	return json.Marshal(request)
+}
 
-	body, err := json.Marshal(request)
-	if err != nil {
-		return nil, err
-	}
-
-	hashedBody := crypto.Keccak256Hash([]byte(body)).Hex()
-	sig, err := crypto.Sign(accounts.TextHash([]byte(hashedBody)), privKey)
-	if err != nil {
-		return nil, err
-	}
-
-	signature := crypto.PubkeyToAddress(privKey.PublicKey).Hex() + ":" + hexutil.Encode(sig)
+// CallWithFlashbotsSignature is like Call but also signs the request
+func (rpc *FlashbotsRPC) CallWithFlashbotsSignature(method FlashBotMethod, address common.Address, signature string, body []byte) (json.RawMessage, error) {
+	sig := address.Hex() + ":" + signature
 
 	req, err := http.NewRequest("POST", rpc.url, bytes.NewBuffer(body))
 	if err != nil {
@@ -177,7 +166,7 @@ func (rpc *FlashbotsRPC) CallWithFlashbotsSignature(method string, privKey *ecds
 
 	req.Header.Add("Content-Type", "application/json")
 	req.Header.Add("Accept", "application/json")
-	req.Header.Add("X-Flashbots-Signature", signature)
+	req.Header.Add("X-Flashbots-Signature", sig)
 	for k, v := range rpc.Headers {
 		req.Header.Add(k, v)
 	}
@@ -199,7 +188,7 @@ func (rpc *FlashbotsRPC) CallWithFlashbotsSignature(method string, privKey *ecds
 	}
 
 	if rpc.Debug {
-		rpc.log.Println(fmt.Sprintf("%s\nRequest: %s\nSignature: %s\nResponse: %s\n", method, body, signature, data))
+		rpc.log.Println(fmt.Sprintf("%s\nRequest: %s\nSignature: %s\nResponse: %s\n", method, body, sig, data))
 	}
 
 	// On error, response looks like this instead of JSON-RPC: {"error":"block param must be a hex int"}
@@ -611,8 +600,8 @@ func Eth1() *big.Int {
 }
 
 // https://docs.flashbots.net/flashbots-auction/searchers/advanced/rpc-endpoint#flashbots_getuserstats
-func (rpc *FlashbotsRPC) FlashbotsGetUserStats(privKey *ecdsa.PrivateKey, blockNumber uint64) (res FlashbotsUserStats, err error) {
-	rawMsg, err := rpc.CallWithFlashbotsSignature("flashbots_getUserStats", privKey, fmt.Sprintf("0x%x", blockNumber))
+func (rpc *FlashbotsRPC) FlashbotsGetUserStats(address common.Address, signature string, body []byte) (res FlashbotsUserStats, err error) {
+	rawMsg, err := rpc.CallWithFlashbotsSignature(FbGetuserstats, address, signature, body)
 	if err != nil {
 		return res, err
 	}
@@ -621,8 +610,8 @@ func (rpc *FlashbotsRPC) FlashbotsGetUserStats(privKey *ecdsa.PrivateKey, blockN
 }
 
 // https://docs.flashbots.net/flashbots-auction/searchers/advanced/rpc-endpoint#eth_callbundle
-func (rpc *FlashbotsRPC) FlashbotsCallBundle(privKey *ecdsa.PrivateKey, param FlashbotsCallBundleParam) (res FlashbotsCallBundleResponse, err error) {
-	rawMsg, err := rpc.CallWithFlashbotsSignature("eth_callBundle", privKey, param)
+func (rpc *FlashbotsRPC) FlashbotsCallBundle(address common.Address, signature string, body []byte) (res FlashbotsCallBundleResponse, err error) {
+	rawMsg, err := rpc.CallWithFlashbotsSignature(EthCallbundle, address, signature, body)
 	if err != nil {
 		return res, err
 	}
@@ -631,8 +620,8 @@ func (rpc *FlashbotsRPC) FlashbotsCallBundle(privKey *ecdsa.PrivateKey, param Fl
 }
 
 // https://docs.flashbots.net/flashbots-auction/searchers/advanced/rpc-endpoint/#eth_sendbundle
-func (rpc *FlashbotsRPC) FlashbotsSendBundle(privKey *ecdsa.PrivateKey, param FlashbotsSendBundleRequest) (res FlashbotsSendBundleResponse, err error) {
-	rawMsg, err := rpc.CallWithFlashbotsSignature("eth_sendBundle", privKey, param)
+func (rpc *FlashbotsRPC) FlashbotsSendBundle(address common.Address, signature string, body []byte) (res FlashbotsSendBundleResponse, err error) {
+	rawMsg, err := rpc.CallWithFlashbotsSignature(EthSendbundle, address, signature, body)
 	if err != nil {
 		return res, err
 	}
@@ -640,8 +629,8 @@ func (rpc *FlashbotsRPC) FlashbotsSendBundle(privKey *ecdsa.PrivateKey, param Fl
 	return res, err
 }
 
-func (rpc *FlashbotsRPC) FlashbotsGetBundleStats(privKey *ecdsa.PrivateKey, param FlashbotsGetBundleStatsParam) (res FlashbotsGetBundleStatsResponse, err error) {
-	rawMsg, err := rpc.CallWithFlashbotsSignature("flashbots_getBundleStats", privKey, param)
+func (rpc *FlashbotsRPC) FlashbotsGetBundleStats(address common.Address, signature string, body []byte) (res FlashbotsGetBundleStatsResponse, err error) {
+	rawMsg, err := rpc.CallWithFlashbotsSignature(FbGetbundlestats, address, signature, body)
 	if err != nil {
 		return res, err
 	}
@@ -650,7 +639,7 @@ func (rpc *FlashbotsRPC) FlashbotsGetBundleStats(privKey *ecdsa.PrivateKey, para
 }
 
 // Simulate a full Ethereum block. numTx is the maximum number of tx to include, used for troubleshooting (default: 0 - all transactions)
-func (rpc *FlashbotsRPC) FlashbotsSimulateBlock(privKey *ecdsa.PrivateKey, block *types.Block, maxTx int) (res FlashbotsCallBundleResponse, err error) {
+func (rpc *FlashbotsRPC) FlashbotsSimulateBlock(address common.Address, signature string, block *types.Block, maxTx int) (res FlashbotsCallBundleResponse, err error) {
 	if rpc.Debug {
 		fmt.Printf("Simulating block %s 0x%x %s \t %d tx \t timestamp: %d\n", block.Number(), block.Number(), block.Header().Hash(), len(block.Transactions()), block.Header().Time)
 	}
@@ -707,13 +696,18 @@ func (rpc *FlashbotsRPC) FlashbotsSimulateBlock(privKey *ecdsa.PrivateKey, block
 		BaseFee:          block.BaseFee().Uint64(),
 	}
 
-	res, err = rpc.FlashbotsCallBundle(privKey, params)
+	body, err := rpc.FlashbotsMessage(EthCallbundle, params)
+	if err != nil {
+		return res, err
+	}
+
+	res, err = rpc.FlashbotsCallBundle(address, signature, body)
 	return res, err
 }
 
 // Sends a rawTx to the Flashbots relay. It will be sent to miners as bundle for 25 blocks, after which the transaction is failed.
-func (rpc *FlashbotsRPC) FlashbotsSendPrivateTransaction(privKey *ecdsa.PrivateKey, param FlashbotsSendPrivateTransactionRequest) (txHash string, err error) {
-	rawMsg, err := rpc.CallWithFlashbotsSignature("eth_sendPrivateTransaction", privKey, param)
+func (rpc *FlashbotsRPC) FlashbotsSendPrivateTransaction(address common.Address, signature string, body []byte) (txHash string, err error) {
+	rawMsg, err := rpc.CallWithFlashbotsSignature(EthSendprivatetransaction, address, signature, body)
 	if err != nil {
 		return "", err
 	}
@@ -726,8 +720,8 @@ func (rpc *FlashbotsRPC) FlashbotsSendPrivateTransaction(privKey *ecdsa.PrivateK
 // be included in the next block.
 //
 // Possible errors: 'tx not found', 'tx was already cancelled', 'tx has already expired'
-func (rpc *FlashbotsRPC) FlashbotsCancelPrivateTransaction(privKey *ecdsa.PrivateKey, param FlashbotsCancelPrivateTransactionRequest) (cancelled bool, err error) {
-	rawMsg, err := rpc.CallWithFlashbotsSignature("eth_cancelPrivateTransaction", privKey, param)
+func (rpc *FlashbotsRPC) FlashbotsCancelPrivateTransaction(address common.Address, signature string, body []byte) (cancelled bool, err error) {
+	rawMsg, err := rpc.CallWithFlashbotsSignature(EthCancelprivatetransaction, address, signature, body)
 	if err != nil {
 		// possible todo: return specific errors for the 3 possible relay-internal error cases
 		return false, err

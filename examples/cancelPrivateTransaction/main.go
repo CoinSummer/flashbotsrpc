@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"github.com/metachris/flashbotsrpc/examples/signature"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/metachris/flashbotsrpc"
@@ -19,7 +20,12 @@ func main() {
 		TxHash: "0xYOUR_TX_HASH",
 	}
 
-	cancelled, err := rpc.FlashbotsCancelPrivateTransaction(privateKey, cancelPrivTxArgs)
+	s, body, err := signature.Signature(rpc, privateKey, flashbotsrpc.EthCallbundle, cancelPrivTxArgs)
+	if err != nil {
+		_ = fmt.Errorf("call signature error: %s", err)
+		return
+	}
+	cancelled, err := rpc.FlashbotsCancelPrivateTransaction(crypto.PubkeyToAddress(privateKey.PublicKey), s, body)
 	if err != nil {
 		if errors.Is(err, flashbotsrpc.ErrRelayErrorResponse) {
 			// ErrRelayErrorResponse means it's a standard Flashbots relay error response, so probably a user error, rather than JSON or network error

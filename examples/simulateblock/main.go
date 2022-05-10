@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"github.com/metachris/flashbotsrpc/examples/signature"
 	"log"
 	"math/big"
 	"os"
@@ -64,7 +65,14 @@ func main() {
 	rpc.Debug = *debugPtr
 
 	privateKey, _ := crypto.GenerateKey()
-	result, err := rpc.FlashbotsSimulateBlock(privateKey, block, 0)
+
+	s, _, err := signature.Signature(rpc, privateKey, flashbotsrpc.EthCallbundle, nil)
+	if err != nil {
+		_ = fmt.Errorf("call signature error: %s", err)
+		return
+	}
+
+	result, err := rpc.FlashbotsSimulateBlock(crypto.PubkeyToAddress(privateKey.PublicKey), s, block, 0)
 	if err != nil {
 		log.Fatal(err)
 	}
